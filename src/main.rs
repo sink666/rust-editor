@@ -194,7 +194,13 @@ fn extract_addresses(input: &mut EditorInput,
         state.address1 = 1;
         state.address2 = state.dollar;
         addr_count = 0;
-    } else if addr1.is_empty() && !comma_first {
+    }
+
+    if addr1.is_empty() && addr2.is_empty() {
+        return Ok(addr_count)
+    };
+
+    if addr1.is_empty() && !comma_first {
         state.address1 = 1;
         state.address2 = addr2.parse().unwrap();
         addr_count = 1;
@@ -213,7 +219,7 @@ fn extract_addresses(input: &mut EditorInput,
         });
     }
 
-    if state.address1 > state.buffer.len() {
+    if state.address1 >= state.buffer.len() {
         return Err(AddressError {
             msg: String::from("address exceeds eof")
         });
@@ -232,6 +238,7 @@ fn extract_addresses(input: &mut EditorInput,
             });
         }
 
+    state.dot = state.address1;
     return Ok(addr_count);
 }
 
@@ -259,7 +266,7 @@ fn execute_commands(input: &mut EditorInput,
                 println!("?")
             } else {
                 //only the current one 
-                let slice = &state.buffer[state.dot-1];
+                let slice = &state.buffer[state.dot];
                 println!("{}", slice);
             }
         },
