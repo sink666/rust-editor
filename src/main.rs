@@ -155,14 +155,14 @@ fn extract_addresses(input: &mut EditorInput,
                      state: &mut EditorState) -> Result<i32, AddressError> {
     let mut addr1: String = String::new();
     let mut addr2: String = String::new();
-    let mut switch_pushing_addr = true;
+    let mut push_to_addr1 = true;
     let mut comma_then_addr = false;
     let mut comma_first = true;
     let mut multiple_addresses = false;
 
     while let Some(peek) = input.peek() {
         if peek.is_digit(10) {
-            if switch_pushing_addr == true {
+            if push_to_addr1 == true {
                 addr1.push(*input.pop().unwrap());
             } else {
                 addr2.push(*input.pop().unwrap());
@@ -175,11 +175,18 @@ fn extract_addresses(input: &mut EditorInput,
             continue;
         } else if *peek == ',' {
             if comma_first {
-                if switch_pushing_addr {
+                if push_to_addr1 {
                     comma_then_addr = true;
                 }
             }
-            switch_pushing_addr = false;
+            
+            push_to_addr1 =
+                if push_to_addr1 == true {
+                    false
+                } else {
+                    true
+                };
+            
             input.pop();
             continue;
         } else {
@@ -231,13 +238,14 @@ fn extract_addresses(input: &mut EditorInput,
         }
 
         //preflight alchemy, vectors are indexed from zero. for safety --1 both
+        //set the current address
         state.address1 -= 1; state.address2 -= 1;
-
+        state.dot = state.address2;
         return Ok(2);
     }
 
     state.address1 -= 1;
-
+    state.dot = state.address1;
     return Ok(1);
 }
 
@@ -251,7 +259,7 @@ fn execute_commands(input: &mut EditorInput,
                     let slice = if addresses > 1 {
                         &state.buffer[state.address1..=state.address2]
                     } else {
-                        &state.buffer[state.address1..=state.address1]
+                        &state.buffer[state.dot..=state.dot]
                     };
                     
                     for lines in slice {
@@ -266,12 +274,8 @@ fn execute_commands(input: &mut EditorInput,
             if addresses < 1 {
                 println!("?")
             } else {
-                //only print the last one
-                let slice = if addresses > 1 {
-                    &state.buffer[state.address2..=state.address2]
-                } else {
-                    &state.buffer[state.address1..=state.address1]
-                };
+                //only the current one if any
+                let slice = &state.buffer[state.dot..=state.dot];
                     
                 for lines in slice {
                     println!("{}", lines);
