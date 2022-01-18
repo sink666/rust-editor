@@ -192,8 +192,14 @@ fn extract_addresses(input: &mut EditorInput,
     state.address1 = if comma_first {
         1
     } else {
-        addr1.parse().unwrap_or(1)
+        addr1.parse().unwrap() 
     };
+
+    if state.address1 == 0 {
+        return Err(AddressError {
+            msg: String::from("cannot address line 0")
+        });
+    }
 
     if state.address1 > state.buffer.len() {
         state.address1 = state.dollar;
@@ -206,23 +212,19 @@ fn extract_addresses(input: &mut EditorInput,
         state.address2 = if comma_first {
             state.address1
         } else if comma_then_addr {
-            addr2.parse().unwrap_or(state.dollar)
+            addr2.parse().unwrap()
         } else {
-            addr2.parse().unwrap_or(state.dollar)
+            addr2.parse().unwrap()
         };
 
         if state.address1 > state.buffer.len() ||
             state.address2 > state.buffer.len() {
-                state.address1 = state.dollar;
-                state.address2 = state.dollar;
                 return Err(AddressError {
                     msg: String::from("some address exceeds eof")
                 });
             }
 
         if state.address1 > state.address2 {
-            state.address1 = state.dollar;
-            state.address2 = state.dollar;
             return Err(AddressError {
                 msg: String::from("first address exceeds second address")
             });
@@ -260,7 +262,22 @@ fn execute_commands(input: &mut EditorInput,
                 _ => { println!("?") },
             }
         },
-        None => { if addresses < 1 { println!("?") }},
+        None => {
+            if addresses < 1 {
+                println!("?")
+            } else {
+                //only print the last one
+                let slice = if addresses > 1 {
+                    &state.buffer[state.address2..=state.address2]
+                } else {
+                    &state.buffer[state.address1..=state.address1]
+                };
+                    
+                for lines in slice {
+                    println!("{}", lines);
+                }
+            }
+        },
     }
 }
 
