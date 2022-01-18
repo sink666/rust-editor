@@ -1,6 +1,7 @@
 use std::io::{self, BufRead, BufReader, Write};
 use std::convert::TryFrom;
 use std::fs::File;
+use std::num::ParseIntError;
 use argparse::{ArgumentParser,Store};
 use tempfile::tempfile;
 use std::fmt;
@@ -26,7 +27,7 @@ impl EditorState {
     pub fn new(config: EditorConfig) -> Self{
         let mut buffer = Self::file_to_vec(&config.openfile);
         buffer.insert(0, "".to_string());
-        let dollar = usize::try_from(buffer.len()).unwrap();
+        let dollar = usize::try_from(buffer.len()).unwrap() - 1;
         Self {
             prompt: config.prompt,
             current_mode: Mode::Command,
@@ -157,23 +158,22 @@ fn extract_addresses(input: &mut EditorInput,
     let mut addr1: String = String::new();
     let mut addr2: String = String::new();
     let mut push_to_addr1 = true;
-    let mut comma_first = true;
-    let mut multiple_addresses = false;
+    let mut comma_first = false;
 
     while let Some(peek) = input.peek() {
         if peek.is_digit(10) {
+            comma_first = false;
             if push_to_addr1 == true {
                 addr1.push(*input.pop().unwrap());
             } else {
                 addr2.push(*input.pop().unwrap());
-                multiple_addresses = true;
             }
-            comma_first = false;
             continue;
         } else if *peek == ' ' {
             input.pop();
             continue;
         } else if *peek == ',' {
+            comma_first = true;
             push_to_addr1 =
                 if push_to_addr1 == true {
                     false
@@ -188,13 +188,24 @@ fn extract_addresses(input: &mut EditorInput,
         }
     }
 
-    if addr1.is_empty() && !comma_first { return Ok(0) };
+    let mut addr_count = 0;
 
-    state.address1 = if comma_first {
-        state.dot
+    if addr1.is_empty() && addr2.is_empty() && comma_first {
+        state.address1 = 1;
+        state.address2 = state.dollar;
+        addr_count = 0;
+    } else if addr1.is_empty() && !comma_first {
+        state.address1 = 1;
+        state.address2 = addr2.parse().unwrap();
+        addr_count = 1;
+    } else if addr2.is_empty() && !comma_first {
+        state.address1 = addr1.parse().unwrap();
+        state.address2 = addr1.parse().unwrap();
+        addr_count = 1;
     } else {
-        addr1.parse().unwrap() 
-    };
+        state.address1 = addr1.parse().unwrap_or(state.dot);
+        state.address2 = addr2.parse().unwrap_or(state.dot);
+    }
 
     if state.address1 == 0 {
         return Err(AddressError {
@@ -202,38 +213,26 @@ fn extract_addresses(input: &mut EditorInput,
         });
     }
 
-    if state.address1 >= state.buffer.len() {
+    if state.address1 > state.buffer.len() {
         return Err(AddressError {
             msg: String::from("address exceeds eof")
         });
     }
 
-    if multiple_addresses {
-        state.address2 =  if comma_first {
-            state.dollar
-        } else {
-            addr2.parse().unwrap()
-        };
+    if state.address1 > state.address2 {
+        return Err(AddressError {
+            msg: String::from("first address may not exceed second address")
+        });
+    }
 
-        if state.address1 > state.buffer.len() ||
-            state.address2 > state.buffer.len() {
-                return Err(AddressError {
-                    msg: String::from("some address exceeds eof")
-                });
-            }
-
-        if state.address1 > state.address2 {
+    if state.address1 > state.buffer.len() ||
+        state.address2 > state.buffer.len() {
             return Err(AddressError {
-                msg: String::from("first address exceeds second address")
+                msg: String::from("some address exceeds eof")
             });
         }
 
-        state.dot = state.address2;
-        return Ok(2);
-    }
-
-    state.dot = state.address1;
-    return Ok(1);
+    return Ok(addr_count);
 }
 
 fn execute_commands(input: &mut EditorInput,
@@ -244,11 +243,8 @@ fn execute_commands(input: &mut EditorInput,
         Some(ichar) => {
             match ichar {
                 'p' => {
-                    let slice = if addresses > 1 {
-                        &state.buffer[state.address1..=state.address2]
-                    } else {
-                        &state.buffer[state.dot..=state.dot]
-                    };
+                    let slice = &state.buffer[state.address1..=
+                                              state.address2];
                     
                     for lines in slice {
                         println!("{}", lines);
@@ -262,12 +258,9 @@ fn execute_commands(input: &mut EditorInput,
             if addresses < 1 {
                 println!("?")
             } else {
-                //only the current one if any
-                let slice = &state.buffer[state.dot..=state.dot];
-                    
-                for lines in slice {
-                    println!("{}", lines);
-                }
+                //only the current one 
+                let slice = &state.buffer[state.dot-1];
+                println!("{}", slice);
             }
         },
     }
