@@ -187,6 +187,8 @@ fn extract_addresses(input: &mut EditorInput,
         }
     }
 
+    if addr1.is_empty() { return Ok(0) };
+
     state.address1 = if comma_first {
         1
     } else {
@@ -258,7 +260,7 @@ fn execute_commands(input: &mut EditorInput,
                 _ => { println!("?") },
             }
         },
-        None => { println!("?") },
+        None => { if addresses < 1 { println!("?") }},
     }
 }
 
