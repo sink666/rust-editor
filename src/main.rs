@@ -24,7 +24,8 @@ pub struct EditorState {
 
 impl EditorState {
     pub fn new(config: EditorConfig) -> Self{
-        let buffer = Self::file_to_vec(&config.openfile);
+        let mut buffer = Self::file_to_vec(&config.openfile);
+        buffer.insert(0, "".to_string());
         let dollar = usize::try_from(buffer.len()).unwrap();
         Self {
             prompt: config.prompt,
@@ -156,7 +157,6 @@ fn extract_addresses(input: &mut EditorInput,
     let mut addr1: String = String::new();
     let mut addr2: String = String::new();
     let mut push_to_addr1 = true;
-    let mut comma_then_addr = false;
     let mut comma_first = true;
     let mut multiple_addresses = false;
 
@@ -174,12 +174,6 @@ fn extract_addresses(input: &mut EditorInput,
             input.pop();
             continue;
         } else if *peek == ',' {
-            if comma_first {
-                if push_to_addr1 {
-                    comma_then_addr = true;
-                }
-            }
-            
             push_to_addr1 =
                 if push_to_addr1 == true {
                     false
@@ -194,10 +188,10 @@ fn extract_addresses(input: &mut EditorInput,
         }
     }
 
-    if addr1.is_empty() { return Ok(0) };
+    if addr1.is_empty() && !comma_first { return Ok(0) };
 
     state.address1 = if comma_first {
-        1
+        state.dot
     } else {
         addr1.parse().unwrap() 
     };
@@ -208,18 +202,15 @@ fn extract_addresses(input: &mut EditorInput,
         });
     }
 
-    if state.address1 > state.buffer.len() {
-        state.address1 = state.dollar;
+    if state.address1 >= state.buffer.len() {
         return Err(AddressError {
             msg: String::from("address exceeds eof")
         });
     }
 
     if multiple_addresses {
-        state.address2 = if comma_first {
-            state.address1
-        } else if comma_then_addr {
-            addr2.parse().unwrap()
+        state.address2 =  if comma_first {
+            state.dollar
         } else {
             addr2.parse().unwrap()
         };
@@ -237,14 +228,10 @@ fn extract_addresses(input: &mut EditorInput,
             });
         }
 
-        //preflight alchemy, vectors are indexed from zero. for safety --1 both
-        //set the current address
-        state.address1 -= 1; state.address2 -= 1;
         state.dot = state.address2;
         return Ok(2);
     }
 
-    state.address1 -= 1;
     state.dot = state.address1;
     return Ok(1);
 }
@@ -252,6 +239,7 @@ fn extract_addresses(input: &mut EditorInput,
 fn execute_commands(input: &mut EditorInput,
                     state: &mut EditorState,
                     addresses: i32) {
+
     match input.pop() {
         Some(ichar) => {
             match ichar {
