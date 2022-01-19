@@ -1,7 +1,5 @@
 use std::io::{self, BufRead, BufReader, Write};
-use std::convert::TryFrom;
 use std::fs::File;
-use std::num::ParseIntError;
 use argparse::{ArgumentParser,Store};
 use tempfile::tempfile;
 use std::fmt;
@@ -27,7 +25,7 @@ impl EditorState {
     pub fn new(config: EditorConfig) -> Self{
         let mut buffer = Self::file_to_vec(&config.openfile);
         buffer.insert(0, "".to_string());
-        let dollar = usize::try_from(buffer.len()).unwrap() - 1;
+        let dollar = buffer.len() - 1;
         Self {
             prompt: config.prompt,
             current_mode: Mode::Command,
@@ -94,16 +92,15 @@ impl EditorConfig {
     }
 }
 
-fn prompt_and_take_input(prompt: &String) -> Result<String, io::Error> {
+fn prompt_and_take_input(prompt: &str) -> Result<String, io::Error> {
     let mut input = String::new();
 
     print!("{}", prompt);
     io::stdout().flush()?;
 
-    match io::stdin().read_line(&mut input) {
-        Ok(_) => Ok(String::from(input.trim())),
-        Err(error) => Err(error)
-    }
+    io::stdin()
+        .read_line(&mut input)
+        .map(|_| String::from(input.trim()))
 }
 
 pub struct EditorInput {
@@ -163,7 +160,7 @@ fn extract_addresses(input: &mut EditorInput,
     while let Some(peek) = input.peek() {
         if peek.is_digit(10) {
             comma_first = false;
-            if push_to_addr1 == true {
+            if push_to_addr1 {
                 addr1.push(*input.pop().unwrap());
             } else {
                 addr2.push(*input.pop().unwrap());
@@ -174,13 +171,7 @@ fn extract_addresses(input: &mut EditorInput,
             continue;
         } else if *peek == ',' {
             comma_first = true;
-            push_to_addr1 =
-                if push_to_addr1 == true {
-                    false
-                } else {
-                    true
-                };
-            
+            push_to_addr1 = !(push_to_addr1);
             input.pop();
             continue;
         } else {
@@ -238,8 +229,10 @@ fn extract_addresses(input: &mut EditorInput,
             });
         }
 
-    state.dot = state.address1;
-    return Ok(addr_count);
+    if addr2.is_empty() { state.address2 = state.address1 }
+    state.dot = state.address2;
+    
+    Ok(addr_count)
 }
 
 fn execute_commands(input: &mut EditorInput,
