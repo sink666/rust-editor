@@ -196,12 +196,7 @@ fn set_addresses(address_vec: VecDeque<String>,
                  state: &mut EditorState) -> i32 {
     
     let parsed: Vec<Value> = address_vec.into_iter().map(|x| match x.parse() {
-        Ok(i) => {
-            match i {
-                Value::NumericAddr(num) => Value::NumericAddr(num),
-                Value::Seperator(c) => Value::Seperator(c),
-            }
-        },
+        Ok(unit) => unit,
         Err(_) => { todo!() },
     }).collect();
 
