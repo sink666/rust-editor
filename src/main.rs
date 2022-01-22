@@ -1,8 +1,8 @@
+use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader, Write};
 use std::fs::File;
 use argparse::{ArgumentParser,Store};
 use tempfile::tempfile;
-use std::fmt;
 
 #[derive(Debug)]
 pub enum Mode {
@@ -139,105 +139,91 @@ impl EditorInput {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct AddressError {
-    msg: String
-}
-
-impl fmt::Display for AddressError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "invalid address; {}", self.msg)
-    }
-}
-
-fn extract_addresses(input: &mut EditorInput,
-                     state: &mut EditorState) -> Result<i32, AddressError> {
-    let mut addr1: String = String::new();
-    let mut addr2: String = String::new();
-    let mut push_to_addr1 = true;
-    let mut comma_first = false;
+fn extract_addresses(input: &mut EditorInput) -> VecDeque<String> {
+    let mut addr_buffer: String = String::new();
+    let mut addr_vec: VecDeque<String> = VecDeque::new();
+    let mut split_here = false;
 
     while let Some(peek) = input.peek() {
         if peek.is_digit(10) {
-            comma_first = false;
-            if push_to_addr1 {
-                addr1.push(*input.pop().unwrap());
-            } else {
-                addr2.push(*input.pop().unwrap());
-            }
-            continue;
+            addr_buffer.push(*input.pop().unwrap());
+        } else if *peek == ',' || *peek == ';' {
+            split_here = !(split_here);
         } else if *peek == ' ' {
             input.pop();
-            continue;
-        } else if *peek == ',' {
-            comma_first = true;
-            push_to_addr1 = !(push_to_addr1);
-            input.pop();
-            continue;
         } else {
             break;
         }
-    }
 
-    let mut addr_count = 0;
-
-    if addr1.is_empty() && addr2.is_empty() && comma_first {
-        state.address1 = 1;
-        state.address2 = state.dollar;
-        addr_count = 0;
-    }
-
-    if addr1.is_empty() && addr2.is_empty() {
-        return Ok(addr_count)
-    };
-
-    if addr1.is_empty() && !comma_first {
-        state.address1 = 1;
-        state.address2 = addr2.parse().unwrap();
-        addr_count = 1;
-    } else if addr2.is_empty() && !comma_first {
-        state.address1 = addr1.parse().unwrap();
-        state.address2 = addr1.parse().unwrap();
-        addr_count = 1;
-    } else {
-        state.address1 = addr1.parse().unwrap_or(state.dot);
-        state.address2 = addr2.parse().unwrap_or(state.dot);
-    }
-
-    if state.address1 == 0 {
-        return Err(AddressError {
-            msg: String::from("cannot address line 0")
-        });
-    }
-
-    if state.address1 >= state.buffer.len() {
-        return Err(AddressError {
-            msg: String::from("address exceeds eof")
-        });
-    }
-
-    if state.address1 > state.address2 {
-        return Err(AddressError {
-            msg: String::from("first address may not exceed second address")
-        });
-    }
-
-    if state.address1 > state.buffer.len() ||
-        state.address2 > state.buffer.len() {
-            return Err(AddressError {
-                msg: String::from("some address exceeds eof")
-            });
+        if split_here {
+            addr_vec.push_back(addr_buffer.clone());
+            addr_buffer.clear();
+            addr_buffer.push(*input.pop().unwrap());
+            addr_vec.push_back(addr_buffer.clone());
+            addr_buffer.clear();
+            split_here = !(split_here);
         }
 
-    if addr2.is_empty() { state.address2 = state.address1 }
-    state.dot = state.address2;
+        if input.end_of_line() {
+            addr_vec.push_back(addr_buffer.clone());
+            addr_buffer.clear();
+        }
+    }
+
+    addr_vec
+}
+
+enum Value {
+    Seperator(char),
+    NumericAddr(usize),
+}
+
+impl std::str::FromStr for Value {
+    type Err = ();
+
+    fn from_str(string: &str) -> Result<Self, ()> {
+        if string.chars().all(char::is_numeric) {
+            Ok(Value::NumericAddr(string.parse().unwrap()))
+        } else if string.chars().all(|x| x == ';' || x == ',') {
+            Ok(Value::Seperator(string.parse().unwrap()))
+        } else {
+            Err(())
+        }
+    }
+}
+
+fn set_addresses(address_vec: VecDeque<String>,
+                 state: &mut EditorState) -> i32 {
     
-    Ok(addr_count)
+    let parsed: Vec<Value> = address_vec.into_iter().map(|x| match x.parse() {
+        Ok(i) => {
+            match i {
+                Value::NumericAddr(num) => Value::NumericAddr(num),
+                Value::Seperator(c) => Value::Seperator(c),
+            }
+        },
+        Err(_) => { todo!() },
+    }).collect();
+
+    for unit in parsed {
+        match unit {
+            Value::NumericAddr(num) => { },
+            Value::Seperator(c) => { },
+        }
+    }
+
+    //debug
+    println!();
+    println!("address1: {} address2: {} dot: {} ",
+           state.address1, state.address2, state.dot);
+    //debug
+    
+    0
 }
 
 fn execute_commands(input: &mut EditorInput,
                     state: &mut EditorState,
-                    addresses: i32) {
+                    num_addrs: i32) {
 
     match input.pop() {
         Some(ichar) => {
@@ -255,7 +241,7 @@ fn execute_commands(input: &mut EditorInput,
             }
         },
         None => {
-            if addresses < 1 {
+            if num_addrs < 1 {
                 println!("?")
             } else {
                 //only the current one 
@@ -273,13 +259,10 @@ fn main() {
         match prompt_and_take_input(&state.prompt) {
             Ok(input) => {
                 let mut input = EditorInput::new(&input);
-                match extract_addresses(&mut input, &mut state) {
-                    Ok(num_addrs) => {
-                        execute_commands(&mut input, &mut state, num_addrs);
-                    },
-                    Err(error) => println!("{}", error),
-                }
-            }
+                let num_addrs = set_addresses(extract_addresses(&mut input),
+                                              &mut state);
+                execute_commands(&mut input, &mut state, num_addrs);
+            },
             Err(error) => println!("error: {}", error),
         }
     }
