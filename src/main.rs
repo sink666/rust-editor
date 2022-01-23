@@ -232,9 +232,10 @@ impl fmt::Display for AddressError {
 fn set_addresses(address_vec: Vec<String>,
                  state: &mut EditorState) -> Result<i32, AddressError> {
     let mut num_addrs = 0;
-    let mut temp_addr1 = 0;
-    let mut temp_addr2 = 0;
-    let mut temp_dot;
+    let mut temp_addr1 = state.address1;
+    let mut temp_addr2 = state.address2;
+    let mut temp_dot = state.dot;
+    let mut first = false;
     
     let parsed = address_vec
         .into_iter()
@@ -247,16 +248,25 @@ fn set_addresses(address_vec: Vec<String>,
                 temp_addr2 = num;
                 num_addrs += 1;
                 temp_dot = temp_addr2;
-
             },
             Value::Seperator(c) => {
                 match c {
                     ',' => {
                         temp_addr1 = temp_addr2;
+
+                        if num_addrs == 0 {
+                            temp_addr1 = 1;
+                            first = !first;
+                        }
                     },
                     ';' => {
                         temp_dot = temp_addr2;
                         temp_addr1 = temp_addr2;
+
+                        if num_addrs == 0 {
+                            temp_addr1 = temp_dot;
+                            first = !first;
+                        }
                     },
                     _ => {},
                 }
@@ -269,14 +279,14 @@ fn set_addresses(address_vec: Vec<String>,
         }
     }
 
-    if num_addrs <= 1 { temp_addr1 = temp_addr2; }
-    temp_dot = temp_addr2;
+    if num_addrs <= 1 && !first { temp_addr1 = temp_addr2; }
+    // temp_dot = temp_addr2;
 
-    if temp_addr1 > state.dollar {
+    if temp_addr1 > state.dollar || temp_addr1 == 0 {
         return Err(AddressError::LinumError(temp_addr1));
     }
 
-    if temp_addr1 > state.dollar {
+    if temp_addr1 > state.dollar || temp_addr2 == 0 {
         return Err(AddressError::LinumError(temp_addr2));
     }
 
