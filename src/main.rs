@@ -176,7 +176,7 @@ fn extract_addresses(input: &mut EditorInput) -> Vec<String> {
             addr_buffer.clear();
         }
     }
-
+    
     addr_vec
 }
 
@@ -229,37 +229,33 @@ impl fmt::Display for AddressError {
 
 fn set_addresses(address_vec: Vec<String>,
                  state: &mut EditorState) -> Result<i32, AddressError> {
-    let mut num_addrs = 0;
+    let mut num_addrs = -1;
     let mut temp_addr1 = state.address1;
     let mut temp_addr2 = state.address2;
     let mut temp_dot;
     let mut first = false;
     
-    println!("{:?}", address_vec);
-
     let parsed = address_vec
         .into_iter()
         .map(|x| x.parse())
         .collect::<Result<Vec<Value>, AddressError>>()?;
 
-    println!("{:?}", parsed);
-    
     for unit in parsed {
         match unit {
             Value::NumericAddr(num) => {
-                println!("addr2 set to {}", &num);
+                if num_addrs == -1 { num_addrs = 0 }
                 temp_addr2 = num;
                 num_addrs += 1;
             },
             Value::Seperator(c) => {
                 match c {
                     ',' => {
-                        println!("addr1 set to {}", &temp_addr2);
                         temp_addr1 = temp_addr2;
 
-                        if num_addrs == 0 {
-                            println!("addr1 set to one");
+                        if num_addrs <= 0 {
+                            num_addrs = 0;
                             temp_addr1 = 1;
+                            temp_addr2 = state.dollar;
                             first = !(first);
                         }
                     },
@@ -267,7 +263,8 @@ fn set_addresses(address_vec: Vec<String>,
                         temp_dot = temp_addr2;
                         temp_addr1 = temp_addr2;
 
-                        if num_addrs == 0 {
+                        if num_addrs <= 0 {
+                            num_addrs = 0;
                             temp_addr1 = temp_dot;
                             first = !first;
                         }
@@ -276,14 +273,13 @@ fn set_addresses(address_vec: Vec<String>,
                 }
             },
             Value::Empty => {
-                // temp_addr1 = state.address1;
-                // temp_addr2 = state.address2;
+                temp_addr1 = state.address1;
+                temp_addr2 = state.address2;
             },
         }
     }
 
     if num_addrs <= 1 && !first {
-        println!("addr1 set to {}", &temp_addr2);
         temp_addr1 = temp_addr2;
     }
     temp_dot = temp_addr2;
@@ -329,7 +325,7 @@ fn execute_commands(input: &mut EditorInput,
             }
         },
         None => {
-            if num_addrs >= 1 {
+            if num_addrs >= 0 {
                 let slice = &state.buffer[state.dot];
                 println!("{}", slice);
             } else {
