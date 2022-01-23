@@ -1,8 +1,9 @@
-use std::collections::VecDeque;
+use core::fmt;
 use std::io::{self, BufRead, BufReader, Write};
 use std::fs::File;
 use argparse::{ArgumentParser,Store};
 use tempfile::tempfile;
+use std::str;
 
 #[derive(Debug)]
 pub enum Mode {
@@ -103,6 +104,7 @@ fn prompt_and_take_input(prompt: &str) -> Result<String, io::Error> {
         .map(|_| String::from(input.trim()))
 }
 
+#[derive(Debug)]
 pub struct EditorInput {
     point: usize,
     line: Vec<char>,
@@ -139,11 +141,11 @@ impl EditorInput {
     }
 }
 
-fn extract_addresses(input: &mut EditorInput) -> VecDeque<String> {
+fn extract_addresses(input: &mut EditorInput) -> Vec<String> {
     let mut addr_buffer: String = String::new();
-    let mut addr_vec: VecDeque<String> = VecDeque::new();
+    let mut addr_vec: Vec<String> = Vec::new();
     let mut split_here = false;
-
+    
     while let Some(peek) = input.peek() {
         if peek.is_digit(10) {
             addr_buffer.push(*input.pop().unwrap());
@@ -151,23 +153,31 @@ fn extract_addresses(input: &mut EditorInput) -> VecDeque<String> {
             split_here = !(split_here);
         } else if *peek == ' ' {
             input.pop();
+        } else if peek.is_alphabetic() {
+            addr_vec.push(addr_buffer.clone());
+            break;
         } else {
             break;
         }
 
         if split_here {
-            addr_vec.push_back(addr_buffer.clone());
+            addr_vec.push(addr_buffer.clone());
             addr_buffer.clear();
             addr_buffer.push(*input.pop().unwrap());
-            addr_vec.push_back(addr_buffer.clone());
+            addr_vec.push(addr_buffer.clone());
             addr_buffer.clear();
             split_here = !(split_here);
         }
 
         if input.end_of_line() {
-            addr_vec.push_back(addr_buffer.clone());
+            addr_vec.push(addr_buffer.clone());
             addr_buffer.clear();
         }
+    }
+
+    if addr_vec.is_empty() {
+        addr_vec.push(String::from(""));
+        return addr_vec;
     }
 
     addr_vec
@@ -176,44 +186,111 @@ fn extract_addresses(input: &mut EditorInput) -> VecDeque<String> {
 enum Value {
     Seperator(char),
     NumericAddr(usize),
+    Empty,
 }
 
-impl std::str::FromStr for Value {
-    type Err = ();
+impl str::FromStr for Value {
+    type Err = AddressError;
 
-    fn from_str(string: &str) -> Result<Self, ()> {
-        if string.chars().all(char::is_numeric) {
+    fn from_str(string: &str) -> Result<Self, AddressError> {
+        if string.is_empty() {
+            Ok(Value::Empty)
+        } else if string.chars().all(char::is_numeric) {
             Ok(Value::NumericAddr(string.parse().unwrap()))
         } else if string.chars().all(|x| x == ';' || x == ',') {
             Ok(Value::Seperator(string.parse().unwrap()))
         } else {
-            Err(())
+            Err(AddressError::WeirdInput(string.to_string()))
         }
     }
 }
 
-fn set_addresses(address_vec: VecDeque<String>,
-                 state: &mut EditorState) -> i32 {
-    
-    let parsed: Vec<Value> = address_vec.into_iter().map(|x| match x.parse() {
-        Ok(unit) => unit,
-        Err(_) => { todo!() },
-    }).collect();
+#[derive(Debug)]
+enum AddressError {
+    LinumError(usize),
+    MalformedError,
+    WeirdInput(String),
+}
 
+impl std::error::Error for AddressError {}
+
+impl fmt::Display for AddressError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::LinumError(num) => {
+                write!(f, "{}: Invalid Line number", num) },
+            Self::MalformedError => {
+                write!(f, "Address malformed")
+            },
+            Self::WeirdInput(string) => {
+                write!(f, "{}: unsupported address num", string)
+            },
+        }
+    }
+}
+
+fn set_addresses(address_vec: Vec<String>,
+                 state: &mut EditorState) -> Result<i32, AddressError> {
+    let mut num_addrs = 0;
+    let mut temp_addr1 = 0;
+    let mut temp_addr2 = 0;
+    let mut temp_dot;
+    
+    let parsed = address_vec
+        .into_iter()
+        .map(|x| x.parse())
+        .collect::<Result<Vec<Value>, AddressError>>()?;
+    
     for unit in parsed {
         match unit {
-            Value::NumericAddr(num) => { },
-            Value::Seperator(c) => { },
+            Value::NumericAddr(num) => {
+                temp_addr2 = num;
+                num_addrs += 1;
+                temp_dot = temp_addr2;
+
+            },
+            Value::Seperator(c) => {
+                match c {
+                    ',' => {
+                        temp_addr1 = temp_addr2;
+                    },
+                    ';' => {
+                        temp_dot = temp_addr2;
+                        temp_addr1 = temp_addr2;
+                    },
+                    _ => {},
+                }
+            },
+            Value::Empty => {
+                temp_addr1 = state.address1;
+                temp_addr2 = state.address2;
+                temp_dot = state.dot;
+            },
         }
     }
 
-    //debug
-    println!();
-    println!("address1: {} address2: {} dot: {} ",
-           state.address1, state.address2, state.dot);
-    //debug
-    
-    0
+    if num_addrs <= 1 { temp_addr1 = temp_addr2; }
+    temp_dot = temp_addr2;
+
+    if temp_addr1 > state.dollar {
+        return Err(AddressError::LinumError(temp_addr1));
+    }
+
+    if temp_addr1 > state.dollar {
+        return Err(AddressError::LinumError(temp_addr2));
+    }
+
+    if temp_addr1 > temp_addr2 {
+        return Err(AddressError::MalformedError);
+    }
+
+    state.address1 = temp_addr1;
+    state.address2 = temp_addr2;
+    state.dot = temp_dot;
+
+    println!("current; a1: {}, a2: {}, dot: {}",
+             state.address1, state.address2, state.dot);
+    Ok(num_addrs)
 }
 
 fn execute_commands(input: &mut EditorInput,
@@ -236,29 +313,26 @@ fn execute_commands(input: &mut EditorInput,
             }
         },
         None => {
-            if num_addrs < 1 {
-                println!("?")
-            } else {
-                //only the current one 
                 let slice = &state.buffer[state.dot];
                 println!("{}", slice);
-            }
         },
     }
 }
 
-fn main() {
+fn main() -> Result<(), io::Error> {
     let mut state = EditorState::new(EditorConfig::new());
 
     loop {
-        match prompt_and_take_input(&state.prompt) {
-            Ok(input) => {
-                let mut input = EditorInput::new(&input);
-                let num_addrs = set_addresses(extract_addresses(&mut input),
-                                              &mut state);
+        let input = prompt_and_take_input(&state.prompt)?;
+        let mut input = EditorInput::new(&input);
+        
+        match set_addresses(extract_addresses(&mut input), &mut state) {
+            Ok(num_addrs) => {
                 execute_commands(&mut input, &mut state, num_addrs);
             },
-            Err(error) => println!("error: {}", error),
+            Err(error) => {
+                println!("? : {}", error);
+            },
         }
     }
 }
