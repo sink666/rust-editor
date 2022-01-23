@@ -300,8 +300,8 @@ fn set_addresses(address_vec: Vec<String>,
     state.address2 = temp_addr2;
     state.dot = temp_dot;
 
-    println!("current; a1: {}, a2: {}, dot: {}",
-             state.address1, state.address2, state.dot);
+    // println!("current; a1: {}, a2: {}, dot: {}",
+    //          state.address1, state.address2, state.dot);
     Ok(num_addrs)
 }
 
