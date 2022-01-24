@@ -5,7 +5,6 @@ use argparse::{ArgumentParser,Store};
 use tempfile::tempfile;
 use std::str;
 
-#[derive(Debug)]
 pub enum Mode {
     Command,
     Insert,
@@ -64,6 +63,12 @@ pub struct EditorConfig {
     openfile: File,
 }
 
+impl Default for EditorConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EditorConfig {
     pub fn new() -> Self {
         let mut prompt = String::from("");
@@ -104,7 +109,6 @@ fn prompt_and_take_input(prompt: &str) -> Result<String, io::Error> {
         .map(|_| String::from(input.trim()))
 }
 
-#[derive(Debug)]
 pub struct EditorInput {
     point: usize,
     line: Vec<char>,
@@ -180,7 +184,6 @@ fn extract_addresses(input: &mut EditorInput) -> Vec<String> {
     addr_vec
 }
 
-#[derive(Debug)]
 enum Value {
     Seperator(char),
     NumericAddr(usize),
@@ -203,14 +206,11 @@ impl str::FromStr for Value {
     }
 }
 
-#[derive(Debug)]
 enum AddressError {
     LinumError(usize),
     MalformedError,
     WeirdInput(String),
 }
-
-impl std::error::Error for AddressError {}
 
 impl fmt::Display for AddressError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -301,8 +301,8 @@ fn set_addresses(address_vec: Vec<String>,
     state.address2 = temp_addr2;
     state.dot = temp_dot;
 
-    println!("current; a1: {}, a2: {}, dot: {}",
-             state.address1, state.address2, state.dot);
+    // println!("current; a1: {}, a2: {}, dot: {}",
+    //          state.address1, state.address2, state.dot);
     Ok(num_addrs)
 }
 
