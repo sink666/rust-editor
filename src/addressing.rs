@@ -16,10 +16,6 @@ impl EditorInput {
         }
     }
 
-    pub fn point(&self) -> usize {
-        self.point
-    }
-
     pub fn peek(&self) -> Option<&char> {
         self.line.get(self.point)
     }
@@ -45,8 +41,10 @@ pub fn extract_addresses(input: &mut EditorInput) -> Vec<String> {
     let mut split_here = false;
     
     while let Some(peek) = input.peek() {
-        if peek.is_digit(10) {
+        if peek.is_digit(10) || *peek == '.' || *peek == '$' {
             addr_buffer.push(*input.pop().unwrap());
+        // } else if *peek == '.' || *peek == '$' {
+        //     split_here = !(split_here);
         } else if *peek == ',' || *peek == ';' {
             split_here = !(split_here);
         } else if *peek == ' ' {
@@ -82,6 +80,7 @@ pub fn extract_addresses(input: &mut EditorInput) -> Vec<String> {
 enum Value {
     Seperator(char),
     NumericAddr(usize),
+    SymbolicAddr(char),
     Empty,
 }
 
@@ -95,6 +94,8 @@ impl str::FromStr for Value {
             Ok(Value::NumericAddr(string.parse().unwrap()))
         } else if string.chars().all(|x| x == ';' || x == ',') {
             Ok(Value::Seperator(string.parse().unwrap()))
+        } else if string.chars().all(|c| c == '$' || c =='.') {
+            Ok(Value::SymbolicAddr(string.parse().unwrap()))
         } else {
             Err(AddressError::WeirdInput(string.to_string()))
         }
@@ -127,7 +128,7 @@ pub fn set_addresses(address_vec: Vec<String>,
     let mut num_addrs = -1;
     let mut temp_addr1 = state.address1;
     let mut temp_addr2 = state.address2;
-    let mut temp_dot;
+    let mut temp_dot = state.dot;
     let mut first = false;
     
     let parsed = address_vec
@@ -143,6 +144,20 @@ pub fn set_addresses(address_vec: Vec<String>,
                 if num_addrs == -1 { num_addrs = 0 }
                 temp_addr2 = num;
                 num_addrs += 1;
+            },
+            Value::SymbolicAddr(sym) => {
+                if num_addrs == -1 { num_addrs = 0 }
+                match sym {
+                    '.' => {
+                        temp_addr2 = temp_dot;
+                        num_addrs += 1;
+                    },
+                    '$' => {
+                        temp_addr2 = state.dollar;
+                        num_addrs += 1;
+                    },
+                    _ => {},
+                }
             },
             Value::Seperator(c) => {
                 match c {
