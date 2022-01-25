@@ -41,10 +41,10 @@ pub fn extract_addresses(input: &mut EditorInput) -> Vec<String> {
     let mut split_here = false;
     
     while let Some(peek) = input.peek() {
-        if peek.is_digit(10) || *peek == '.' || *peek == '$' {
+        if peek.is_digit(10) {
             addr_buffer.push(*input.pop().unwrap());
-        // } else if *peek == '.' || *peek == '$' {
-        //     split_here = !(split_here);
+        } else if *peek == '.' || *peek == '$' || *peek == '+' || *peek == '-' {
+            split_here = !(split_here);
         } else if *peek == ',' || *peek == ';' {
             split_here = !(split_here);
         } else if *peek == ' ' {
@@ -94,7 +94,7 @@ impl str::FromStr for Value {
             Ok(Value::NumericAddr(string.parse().unwrap()))
         } else if string.chars().all(|x| x == ';' || x == ',') {
             Ok(Value::Seperator(string.parse().unwrap()))
-        } else if string.chars().all(|c| c == '$' || c =='.') {
+        } else if string.chars().all(|c| ['$', '.', '+', '-'].contains(&c)) {
             Ok(Value::SymbolicAddr(string.parse().unwrap()))
         } else {
             Err(AddressError::WeirdInput(string.to_string()))
@@ -156,6 +156,8 @@ pub fn set_addresses(address_vec: Vec<String>,
                         temp_addr2 = state.dollar;
                         num_addrs += 1;
                     },
+                    '+' => { temp_addr2 += 1 },
+                    '-' => { temp_addr2 -= 1 },
                     _ => {},
                 }
             },
@@ -201,7 +203,7 @@ pub fn set_addresses(address_vec: Vec<String>,
         return Err(AddressError::LinumError(temp_addr1));
     }
 
-    if temp_addr1 > state.dollar || temp_addr2 == 0 {
+    if temp_addr2 > state.dollar || temp_addr2 == 0 {
         return Err(AddressError::LinumError(temp_addr2));
     }
 
