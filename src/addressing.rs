@@ -96,8 +96,8 @@ pub fn extract_addresses(input: &mut EditorInput)
         if peek.is_digit(10) {
             addr_buffer.push(*input.pop().unwrap());
         } else if ['.','$','+','-',',',';'].contains(peek) {
-            split_here = !(split_here);
-        } else if *peek == ' ' {
+            split_here = !split_here;
+        } else if peek.is_whitespace() {
             input.pop();
         } else if peek.is_alphabetic() {
             if !addr_buffer.is_empty() { addr_vec.push(addr_buffer.clone()) }
@@ -114,7 +114,7 @@ pub fn extract_addresses(input: &mut EditorInput)
             addr_buffer.push(*input.pop().unwrap());
             addr_vec.push(addr_buffer.clone());
             addr_buffer.clear();
-            split_here = !(split_here);
+            split_here = !split_here;
         }
 
         if input.end_of_line() && !addr_buffer.is_empty() {
