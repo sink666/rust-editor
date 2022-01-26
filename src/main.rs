@@ -1,5 +1,6 @@
 use std::io::{self, BufRead, BufReader, Write};
 use std::fs::File;
+use std::error::Error;
 use argparse::{ArgumentParser,Store};
 use tempfile::tempfile;
 
@@ -140,14 +141,15 @@ fn execute_commands(input: &mut EditorInput,
     }
 }
 
-fn main() -> Result<(), io::Error> {
+fn main() -> Result<(), Box<dyn Error>> {
     let mut state = EditorState::new(EditorConfig::new());
 
     loop {
         let input = prompt_and_take_input(&state.prompt)?;
         let mut input = EditorInput::new(&input);
+        let parsed = extract_addresses(&mut input)?;
         
-        match set_addresses(extract_addresses(&mut input), &mut state) {
+        match set_addresses(parsed, &mut state) {
             Ok(num_addrs) => {
                 execute_commands(&mut input, &mut state, num_addrs);
             },

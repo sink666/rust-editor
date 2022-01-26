@@ -1,5 +1,6 @@
 use core::fmt;
 use std::str;
+use std::error::Error;
 
 use crate::EditorState;
 
@@ -35,7 +36,58 @@ impl EditorInput {
     }
 }
 
-pub fn extract_addresses(input: &mut EditorInput) -> Vec<String> {
+#[derive(Debug)]
+pub enum Value {
+    Seperator(char),
+    NumericAddr(usize),
+    SymbolicAddr(char),
+    Empty,
+}
+
+impl str::FromStr for Value {
+    type Err = AddressError;
+
+    fn from_str(string: &str) -> Result<Self, AddressError> {
+        if string.is_empty() {
+            Ok(Self::Empty)
+        } else if string.chars().all(char::is_numeric) {
+            Ok(Self::NumericAddr(string.parse().unwrap()))
+        } else if string.chars().all(|x| x == ';' || x == ',') {
+            Ok(Self::Seperator(string.parse().unwrap()))
+        } else if string.chars().all(|c| ['$', '.', '+', '-'].contains(&c)) {
+            Ok(Self::SymbolicAddr(string.parse().unwrap()))
+        } else {
+            Err(AddressError::WeirdInput(string.to_string()))
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum AddressError {
+    LinumError(usize),
+    MalformedError,
+    WeirdInput(String),
+}
+
+impl Error for AddressError {}
+
+impl fmt::Display for AddressError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::LinumError(num) => {
+                write!(f, "{}: Invalid Line number", num) },
+            Self::MalformedError => {
+                write!(f, "Address malformed")
+            },
+            Self::WeirdInput(string) => {
+                write!(f, "{}: unsupported address num", string)
+            },
+        }
+    }
+}
+
+pub fn extract_addresses(input: &mut EditorInput)
+                         -> Result<Vec<Value>, AddressError> {
     let mut addr_buffer: String = String::new();
     let mut addr_vec: Vec<String> = Vec::new();
     let mut split_here = false;
@@ -43,9 +95,7 @@ pub fn extract_addresses(input: &mut EditorInput) -> Vec<String> {
     while let Some(peek) = input.peek() {
         if peek.is_digit(10) {
             addr_buffer.push(*input.pop().unwrap());
-        } else if *peek == '.' || *peek == '$' || *peek == '+' || *peek == '-' {
-            split_here = !(split_here);
-        } else if *peek == ',' || *peek == ';' {
+        } else if ['.','$','+','-',',',';'].contains(peek) {
             split_here = !(split_here);
         } else if *peek == ' ' {
             input.pop();
@@ -73,57 +123,15 @@ pub fn extract_addresses(input: &mut EditorInput) -> Vec<String> {
         }
     }
     
-    addr_vec
+    let parsed = addr_vec
+        .into_iter()
+        .map(|x| x.parse())
+        .collect::<Result<Vec<Value>, AddressError>>()?;
+
+    Ok(parsed)
 }
 
-#[derive(Debug)]
-enum Value {
-    Seperator(char),
-    NumericAddr(usize),
-    SymbolicAddr(char),
-    Empty,
-}
-
-impl str::FromStr for Value {
-    type Err = AddressError;
-
-    fn from_str(string: &str) -> Result<Self, AddressError> {
-        if string.is_empty() {
-            Ok(Value::Empty)
-        } else if string.chars().all(char::is_numeric) {
-            Ok(Value::NumericAddr(string.parse().unwrap()))
-        } else if string.chars().all(|x| x == ';' || x == ',') {
-            Ok(Value::Seperator(string.parse().unwrap()))
-        } else if string.chars().all(|c| ['$', '.', '+', '-'].contains(&c)) {
-            Ok(Value::SymbolicAddr(string.parse().unwrap()))
-        } else {
-            Err(AddressError::WeirdInput(string.to_string()))
-        }
-    }
-}
-
-pub enum AddressError {
-    LinumError(usize),
-    MalformedError,
-    WeirdInput(String),
-}
-
-impl fmt::Display for AddressError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::LinumError(num) => {
-                write!(f, "{}: Invalid Line number", num) },
-            Self::MalformedError => {
-                write!(f, "Address malformed")
-            },
-            Self::WeirdInput(string) => {
-                write!(f, "{}: unsupported address num", string)
-            },
-        }
-    }
-}
-
-pub fn set_addresses(address_vec: Vec<String>,
+pub fn set_addresses(address_vec: Vec<Value>,
                  state: &mut EditorState) -> Result<i32, AddressError> {
     let mut num_addrs = -1;
     let mut temp_addr1 = state.address1;
@@ -131,14 +139,9 @@ pub fn set_addresses(address_vec: Vec<String>,
     let mut temp_dot = state.dot;
     let mut first = false;
     
-    let parsed = address_vec
-        .into_iter()
-        .map(|x| x.parse())
-        .collect::<Result<Vec<Value>, AddressError>>()?;
+    println!("{:?}", address_vec);
 
-    println!("{:?}", parsed);
-
-    for unit in parsed {
+    for unit in address_vec {
         match unit {
             Value::NumericAddr(num) => {
                 if num_addrs == -1 { num_addrs = 0 }
@@ -215,8 +218,8 @@ pub fn set_addresses(address_vec: Vec<String>,
     state.address2 = temp_addr2;
     state.dot = temp_dot;
 
-    println!("current; a1: {}, a2: {}, dot: {}",
-              state.address1, state.address2, state.dot);
+    // println!("current; a1: {}, a2: {}, dot: {}",
+    //           state.address1, state.address2, state.dot);
     Ok(num_addrs)
 }
 
