@@ -122,6 +122,8 @@ pub fn extract_addresses(input: &mut EditorInput)
             addr_buffer.clear();
         }
     }
+
+    if addr_vec.is_empty() { addr_vec.push(String::from("")) }
     
     let parsed = addr_vec
         .into_iter()
@@ -139,8 +141,6 @@ pub fn set_addresses(address_vec: Vec<Value>,
     let mut temp_dot = state.dot;
     let mut first = false;
     
-    println!("{:?}", address_vec);
-
     for unit in address_vec {
         match unit {
             Value::NumericAddr(num) => {

@@ -111,10 +111,8 @@ fn prompt_and_take_input(prompt: &str) -> Result<String, io::Error> {
         .map(|_| String::from(input.trim()))
 }
 
-fn execute_commands(input: &mut EditorInput,
-                    state: &mut EditorState,
+fn execute_commands(input: &mut EditorInput, state: &mut EditorState,
                     num_addrs: i32) {
-
     match input.pop() {
         Some(ichar) => {
             match ichar {
@@ -127,7 +125,7 @@ fn execute_commands(input: &mut EditorInput,
                     }
                 },
                 'Q' => { std::process::exit(0); },
-                _ => { println!("?") },
+                _ => { println!("?"); },
             }
         },
         None => {
