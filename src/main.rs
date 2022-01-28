@@ -100,7 +100,7 @@ impl EditorConfig {
     }
 }
 
-fn prompt_and_take_input(prompt: &str) -> Result<String, io::Error> {
+fn command_prompt(prompt: &str) -> Result<String, io::Error> {
     let mut input = String::new();
 
     print!("{}", prompt);
@@ -116,6 +116,9 @@ fn execute_commands(input: &mut EditorInput, state: &mut EditorState,
     match input.pop() {
         Some(ichar) => {
             match ichar {
+                'a' => { //enter input mode
+                    state.flip_mode();
+                },
                 'p' => {
                     let slice = &state.buffer[state.address1..=
                                               state.address2];
@@ -143,16 +146,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut state = EditorState::new(EditorConfig::new());
 
     loop {
-        let input = prompt_and_take_input(&state.prompt)?;
-        let mut input = EditorInput::new(&input);
-        let parsed = extract_addresses(&mut input)?;
-        
-        match set_addresses(parsed, &mut state) {
-            Ok(num_addrs) => {
-                execute_commands(&mut input, &mut state, num_addrs);
+        match &state.current_mode {
+            Mode::Command => {
+                let temp = command_prompt(&state.prompt)?;
+                let mut input = EditorInput::new(&temp);
+                let parsed = extract_addresses(&mut input)?;
+
+                match set_addresses(parsed, &mut state) {
+                    Ok(num_addrs) => {
+                        execute_commands(&mut input, &mut state, num_addrs);
+                    },
+                    Err(error) => {
+                        println!("? : {}", error);
+                    },
+                }
             },
-            Err(error) => {
-                println!("? : {}", error);
+            Mode::Insert => {
+                
             },
         }
     }
