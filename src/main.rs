@@ -142,13 +142,16 @@ fn execute_commands(input: &mut EditorInput, state: &mut EditorState,
     }
 }
 
-fn take_commands_and_execute(state: &mut EditorState)
-                             -> Result<(), Box<dyn Error>> {
+fn command_mode(state: &mut EditorState) -> Result<(), Box<dyn Error>> {
     let temp = command_prompt(&state.prompt)?;
     let input = &mut EditorInput::new(&temp);
     let parsed = extract_addresses(input)?;
     let num_addrs = set_addresses(parsed, state)?;
     Ok(execute_commands(input, state, num_addrs))
+}
+
+fn input_mode(state: &mut EditorState) -> Result<(), Box<dyn Error>> {
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -157,13 +160,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     loop {
         match &state.current_mode {
             Mode::Command => {
-                match take_commands_and_execute(&mut state) {
+                match command_mode(&mut state) {
                     Ok(_) => continue,
                     Err(error) => println!("? : {}", error),
                 }
             },
             Mode::Insert => {
-                
+                input_mode(&mut state)?;
             },
         }
     }
